@@ -1,13 +1,168 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>video-js-hls-demo</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Adaptive Video Player</title>
+		<link
+			href="https://vjs.zencdn.net/8.16.1/video-js.css"
+			rel="stylesheet"
+		/>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style>
+			body {
+				font-family: system-ui, -apple-system, sans-serif;
+				padding: 2rem;
+			}
+			#quality-info {
+				margin-top: 1rem;
+				padding: 1rem;
+				background: #f5f5f5;
+				border-radius: 8px;
+				font-size: 14px;
+			}
+			#quality-info strong {
+				color: #2563eb;
+			}
+			.vjs-big-play-button {
+				display: none !important;
+			}
+			#my-video.video-started .vjs-big-play-button {
+				display: block !important;
+			}
+		</style>
+		<link
+			rel="stylesheet"
+			href="https://solid-design-system.fe.union-investment.de/components/5.16.1/cdn/solid-components.css"
+		/>
+		<script
+			type="module"
+			src="https://solid-design-system.fe.union-investment.de/components/5.16.1/cdn/solid-components.bundle.js"
+		></script>
+	</head>
+	<body>
+		<sd-video id="video-wrapper" class="w-full aspect-video">
+			<video
+				id="my-video"
+				class="video-js vjs-default-skin"
+				controls
+				preload="auto"
+			>
+				<source
+					src="/videos/master.m3u8"
+					type="application/x-mpegURL"
+				/>
+			</video>
+
+			<img
+				slot="poster"
+				alt="Video preview"
+				class="w-full aspect-video object-cover"
+				src="https://placehold.co/1920x1080"
+			/>
+		</sd-video>
+
+		<div id="quality-info">
+			<div>
+				Current Quality:
+				<strong id="current-quality">Loading...</strong>
+			</div>
+			<div>Resolution: <strong id="current-resolution">-</strong></div>
+			<div>Bandwidth: <strong id="current-bandwidth">-</strong></div>
+		</div>
+
+		<script src="https://vjs.zencdn.net/8.16.1/video.min.js"></script>
+		<script type="module">
+			const videoWrapper = document.getElementById("video-wrapper");
+			const videoElement = document.getElementById("my-video");
+			const player = videojs("my-video", {
+				responsive: true,
+				fluid: true,
+				html5: {
+					vhs: {
+						overrideNative: true,
+						enableLowInitialPlaylist: true,
+						smoothQualityChange: true,
+					},
+				},
+			});
+
+			const currentQualityEl = document.getElementById("current-quality");
+			const currentResolutionEl =
+				document.getElementById("current-resolution");
+			const currentBandwidthEl =
+				document.getElementById("current-bandwidth");
+
+			let hasStarted = false;
+
+			videoWrapper.addEventListener("sd-play", () => {
+				if (!hasStarted) {
+					hasStarted = true;
+					videoElement.classList.add("video-started");
+				}
+				player.play();
+			});
+
+			player.on("play", () => {
+				videoWrapper.setAttribute("playing", "");
+			});
+
+			player.on("pause", () => {
+				videoWrapper.removeAttribute("playing");
+			});
+
+			player.on("ended", () => {
+				videoWrapper.removeAttribute("playing");
+			});
+
+			function updateQualityInfo() {
+				const tech = player.tech({ IWillNotUseThisInPlugins: true });
+				const vhs = tech?.vhs;
+
+				if (!vhs) {
+					return;
+				}
+
+				const playlists = vhs.playlists;
+				const currentPlaylist = playlists?.media();
+
+				if (currentPlaylist) {
+					const quality = currentPlaylist.attributes?.RESOLUTION
+						?.height
+						? `${currentPlaylist.attributes.RESOLUTION.height}p`
+						: "Auto";
+					const resolution = currentPlaylist.attributes?.RESOLUTION
+						? `${currentPlaylist.attributes.RESOLUTION.width}x${currentPlaylist.attributes.RESOLUTION.height}`
+						: "Unknown";
+					const bandwidth = currentPlaylist.attributes?.BANDWIDTH
+						? `${(
+								currentPlaylist.attributes.BANDWIDTH / 1000
+						  ).toFixed(0)} kbps`
+						: "Unknown";
+
+					currentQualityEl.textContent = quality;
+					currentResolutionEl.textContent = resolution;
+					currentBandwidthEl.textContent = bandwidth;
+				}
+			}
+
+			player.ready(() => {
+				const tech = player.tech({ IWillNotUseThisInPlugins: true });
+
+				if (tech?.vhs) {
+					tech.vhs.on("loadedplaylist", updateQualityInfo);
+					tech.vhs.playlists.on("mediachange", updateQualityInfo);
+				}
+
+				player.on("loadedmetadata", updateQualityInfo);
+				player.on("playing", updateQualityInfo);
+
+				setInterval(updateQualityInfo, 2000);
+			});
+
+			window.addEventListener("resize", () => {
+				console.log("Window resized - quality may adapt");
+			});
+		</script>
+	</body>
 </html>
